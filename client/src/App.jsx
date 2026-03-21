@@ -9,6 +9,7 @@ const socket = io('/', {
 const MESSAGE_PAGE_SIZE = 30
 const AWAY_AUTO_LOGOUT_MS = 60 * 60 * 1000
 const LAST_LEFT_APP_AT_KEY = 'single-chat:last-left-app-at'
+const TOP_CLICK_LOAD_ZONE_PX = 130
 
 function mergeUniqueMessages(existing, incoming, options = {}) {
   const prepend = Boolean(options.prepend)
@@ -88,11 +89,32 @@ function App() {
   const logoutInFlightRef = useRef(false)
   const shouldScrollToBottomRef = useRef(false)
   const pendingScrollAdjustRef = useRef(null)
+  const initialBottomSettledRef = useRef(false)
+  const hasMoreMessagesRef = useRef(false)
+  const loadingOlderMessagesRef = useRef(false)
+  const nextOffsetRef = useRef(0)
+  const userRef = useRef(null)
 
   const sortedMessages = useMemo(
     () => [...messages].sort((a, b) => a.createdAt - b.createdAt),
     [messages],
   )
+
+  useEffect(() => {
+    hasMoreMessagesRef.current = hasMoreMessages
+  }, [hasMoreMessages])
+
+  useEffect(() => {
+    loadingOlderMessagesRef.current = loadingOlderMessages
+  }, [loadingOlderMessages])
+
+  useEffect(() => {
+    nextOffsetRef.current = nextOffset
+  }, [nextOffset])
+
+  useEffect(() => {
+    userRef.current = user
+  }, [user])
 
   useEffect(() => {
     const timeline = timelineRef.current
@@ -117,6 +139,7 @@ function App() {
     shouldScrollToBottomRef.current = false
     requestAnimationFrame(() => {
       timeline.scrollTop = timeline.scrollHeight
+      initialBottomSettledRef.current = true
     })
   }, [sortedMessages])
 
@@ -186,17 +209,24 @@ function App() {
   }, [user])
 
   async function loadOlderMessages() {
-    if (!user || loadingOlderMessages || !hasMoreMessages) {
+    if (
+      !initialBottomSettledRef.current ||
+      !userRef.current ||
+      loadingOlderMessagesRef.current ||
+      !hasMoreMessagesRef.current
+    ) {
       return
     }
 
+    loadingOlderMessagesRef.current = true
     setLoadingOlderMessages(true)
     try {
       const timeline = timelineRef.current
       const previousScrollHeight = timeline?.scrollHeight || 0
       const previousScrollTop = timeline?.scrollTop || 0
+      const offsetToLoad = nextOffsetRef.current
 
-      const res = await fetch(`/api/messages?limit=${MESSAGE_PAGE_SIZE}&offset=${nextOffset}`, {
+      const res = await fetch(`/api/messages?limit=${MESSAGE_PAGE_SIZE}&offset=${offsetToLoad}`, {
         credentials: 'include',
       })
 
@@ -216,11 +246,17 @@ function App() {
         setMessages((prev) => mergeUniqueMessages(prev, olderMessages, { prepend: true }))
       }
 
-      setHasMoreMessages(Boolean(data.pagination?.hasMore))
-      setNextOffset(Number(data.pagination?.nextOffset || nextOffset + olderMessages.length))
+      const updatedHasMore = Boolean(data.pagination?.hasMore)
+      const updatedNextOffset = Number(data.pagination?.nextOffset || offsetToLoad + olderMessages.length)
+
+      hasMoreMessagesRef.current = updatedHasMore
+      nextOffsetRef.current = updatedNextOffset
+      setHasMoreMessages(updatedHasMore)
+      setNextOffset(updatedNextOffset)
     } catch {
       setError('Failed to load older messages.')
     } finally {
+      loadingOlderMessagesRef.current = false
       setLoadingOlderMessages(false)
     }
   }
@@ -426,8 +462,14 @@ function App() {
         ref={timelineRef}
         className="timeline"
         aria-live="polite"
-        onScroll={(event) => {
-          if (event.currentTarget.scrollTop <= 40) {
+        onClick={(event) => {
+          if (event.target !== event.currentTarget) {
+            return
+          }
+
+          const rect = event.currentTarget.getBoundingClientRect()
+          const clickY = event.clientY - rect.top
+          if (clickY <= TOP_CLICK_LOAD_ZONE_PX) {
             loadOlderMessages()
           }
         }}

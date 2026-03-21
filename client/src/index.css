@@ -155,6 +155,7 @@ button:disabled {
   padding: 14px;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   align-items: flex-start;
   gap: 10px;
 }

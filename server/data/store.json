@@ -67,6 +67,15 @@
       "size": 249369,
       "senderId": 2,
       "createdAt": 1774121897490
+    },
+    {
+      "id": "c14eeb2c-79b1-4a3b-8db1-17e77eeaa24d",
+      "originalName": "IMG_20260322_005557.jpg",
+      "storedName": "cfbf1760-1610-4ee8-a2e8-b57ceea20634.jpg",
+      "mimeType": "image/jpeg",
+      "size": 5304353,
+      "senderId": 2,
+      "createdAt": 1774122887952
     }
   ],
   "messages": [
@@ -701,6 +710,22 @@
       "body": "Nn",
       "fileId": null,
       "createdAt": 1774122135585
+    },
+    {
+      "id": "4df6b51c-5185-4c82-bf4c-64caa134f685",
+      "senderId": 1,
+      "type": "text",
+      "body": "djdjd",
+      "fileId": null,
+      "createdAt": 1774122422857
+    },
+    {
+      "id": "eb906e93-7ffa-42cd-9288-6fee34469dbd",
+      "senderId": 2,
+      "type": "file",
+      "body": null,
+      "fileId": "c14eeb2c-79b1-4a3b-8db1-17e77eeaa24d",
+      "createdAt": 1774122887952
     }
   ],
   "counters": {
