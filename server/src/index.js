@@ -21,17 +21,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const dataDir = path.resolve(__dirname, "../data");
 const uploadDir = path.join(dataDir, "uploads");
+const sessionsDir = path.join(dataDir, "sessions");
 const dbFile = path.join(dataDir, "store.json");
 
 fs.mkdirSync(uploadDir, { recursive: true });
+fs.mkdirSync(sessionsDir, { recursive: true });
 
 const PORT = Number(process.env.PORT || 3001);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
 const SESSION_SECRET = process.env.SESSION_SECRET || "change-me-in-env";
-const USER1_NAME = process.env.USER1_NAME || "alice";
-const USER1_PASSWORD = process.env.USER1_PASSWORD || "alice12345";
-const USER2_NAME = process.env.USER2_NAME || "bob";
-const USER2_PASSWORD = process.env.USER2_PASSWORD || "bob12345";
+const USER1_NAME = process.env.USER1_NAME || "saniya";
+const USER1_PASSWORD = process.env.USER1_PASSWORD || "saniya1234";
+const USER2_NAME = process.env.USER2_NAME || "sujal";
+const USER2_PASSWORD = process.env.USER2_PASSWORD || "sujal1234";
 
 const FileStore = FileStoreFactory(session);
 
@@ -98,8 +100,10 @@ app.use(express.json());
 
 const sessionMiddleware = session({
   store: new FileStore({
-    path: path.join(dataDir, "sessions"),
+    path: sessionsDir,
     ttl: 24 * 60 * 60,
+    retries: 0,
+    logFn: () => {},
   }),
   secret: SESSION_SECRET,
   resave: false,
@@ -161,6 +165,17 @@ app.post("/api/auth/logout", requireAuth, (req, res) => {
   });
 });
 
+app.post("/api/auth/logout-beacon", (req, res) => {
+  if (!req.session) {
+    return res.status(204).end();
+  }
+
+  return req.session.destroy(() => {
+    res.clearCookie("connect.sid");
+    res.status(204).end();
+  });
+});
+
 app.get("/api/auth/me", (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -194,13 +209,30 @@ function mapMessage(rawMessage) {
   };
 }
 
-app.get("/api/messages", requireAuth, (_req, res) => {
-  const messages = store.messages
-    .slice(-500)
-    .sort((a, b) => a.createdAt - b.createdAt)
-    .map(mapMessage);
+app.get("/api/messages", requireAuth, (req, res) => {
+  const requestedLimit = Number(req.query.limit);
+  const requestedOffset = Number(req.query.offset);
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 30;
+  const offset = Number.isFinite(requestedOffset) ? Math.max(requestedOffset, 0) : 0;
 
-  return res.json({ messages });
+  const total = store.messages.length;
+  const end = Math.max(total - offset, 0);
+  const start = Math.max(end - limit, 0);
+
+  const messages = store.messages.slice(start, end).map(mapMessage);
+  const nextOffset = offset + messages.length;
+  const hasMore = start > 0;
+
+  return res.json({
+    messages,
+    pagination: {
+      limit,
+      offset,
+      nextOffset,
+      hasMore,
+      total,
+    },
+  });
 });
 
 const allowedMimePrefixes = ["image/", "audio/", "video/"];
@@ -275,6 +307,8 @@ app.get("/api/files/:id", requireAuth, async (req, res) => {
   }
 
   res.setHeader("Content-Type", file.mimeType);
+  res.setHeader("Content-Length", String(file.size));
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable, no-transform");
   res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(file.originalName)}"`);
   return res.sendFile(absolutePath);
 });
@@ -303,6 +337,7 @@ io.use((socket, next) => {
   if (!userId || !username) {
     return next(new Error("Unauthorized"));
   }
+
   socket.user = { id: userId, username };
   return next();
 });

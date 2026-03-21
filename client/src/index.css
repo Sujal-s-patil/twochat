@@ -10,8 +10,8 @@
   --accent: #167a6c;
   --accent-strong: #115a50;
   --danger: #c2373f;
-  --bubble-me: #d8f0ec;
-  --bubble-other: #f1f4f8;
+  --bubble-me: #f1f4f8;
+  --bubble-other:  #d8f0ec;
   --shadow: 0 14px 40px rgba(22, 44, 62, 0.14);
 }
 
@@ -137,8 +137,13 @@ button:disabled {
 }
 
 .ghost {
-  background: #eff3f6;
-  color: var(--ink);
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.ghost:hover {
+  background: var(--accent-strong);
 }
 
 .timeline {
@@ -148,7 +153,9 @@ button:disabled {
   background: color-mix(in srgb, var(--panel), #f2f8fa 20%);
   box-shadow: var(--shadow);
   padding: 14px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
 }
 
@@ -163,7 +170,7 @@ button:disabled {
 }
 
 .bubble.mine {
-  margin-left: auto;
+  align-self: flex-end;
   background: var(--bubble-me);
   border-radius: 16px 16px 4px 16px;
   border-color: #c7e5df;
@@ -209,11 +216,13 @@ button:disabled {
 
 .media.image {
   max-height: 300px;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .player {
   background: #fff;
+  max-height: 360px;
+  object-fit: contain;
 }
 
 .file-link {
@@ -225,6 +234,13 @@ button:disabled {
 .error {
   color: var(--danger);
   font-size: 0.9rem;
+}
+
+.history-status {
+  width: 100%;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .floating {
