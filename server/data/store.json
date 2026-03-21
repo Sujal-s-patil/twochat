@@ -1,0 +1,72 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "alice",
+      "passwordHash": "$2b$12$Zs0J0JjKEzKKb64JDYv5f.4zNRsqIITbGINeoqhtB/ltVfSwIC3Ba",
+      "createdAt": 1774117980071
+    },
+    {
+      "id": 2,
+      "username": "bob",
+      "passwordHash": "$2b$12$1139pCvBU4aQaEJzCe/c0OpIkjLPemnn4VAqqLPUvwSmk7/Bmzk4S",
+      "createdAt": 1774117980334
+    }
+  ],
+  "files": [
+    {
+      "id": "15fa2c22-6440-4adb-a93c-25860f1c141d",
+      "originalName": "Screenshot from 2026-03-12 10-41-01.png",
+      "storedName": "de339d24-ae20-498a-b596-2befc9e7afab.png",
+      "mimeType": "image/png",
+      "size": 161449,
+      "senderId": 1,
+      "createdAt": 1774118252461
+    }
+  ],
+  "messages": [
+    {
+      "id": "a1187143-9359-4df0-a4e7-90c7d6e64bce",
+      "senderId": 1,
+      "type": "text",
+      "body": "hello there",
+      "fileId": null,
+      "createdAt": 1774118243033
+    },
+    {
+      "id": "77dee510-8f87-4833-8be9-478289b5cbc9",
+      "senderId": 1,
+      "type": "file",
+      "body": null,
+      "fileId": "15fa2c22-6440-4adb-a93c-25860f1c141d",
+      "createdAt": 1774118252461
+    },
+    {
+      "id": "fd4d484a-b91d-4316-bde1-5c6ffd16be7c",
+      "senderId": 1,
+      "type": "text",
+      "body": "nnc",
+      "fileId": null,
+      "createdAt": 1774118270403
+    },
+    {
+      "id": "60648062-5e14-4680-bd8e-211929cffb44",
+      "senderId": 2,
+      "type": "text",
+      "body": "hello there",
+      "fileId": null,
+      "createdAt": 1774118337610
+    },
+    {
+      "id": "c010888d-c1b6-408d-9bfb-0e385bd55a94",
+      "senderId": 1,
+      "type": "text",
+      "body": "baby",
+      "fileId": null,
+      "createdAt": 1774118350237
+    }
+  ],
+  "counters": {
+    "userId": 2
+  }
+}

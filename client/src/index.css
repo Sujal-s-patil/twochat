@@ -1,0 +1,253 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Newsreader:opsz,wght@6..72,500&display=swap');
+
+:root {
+  --bg-top: #f7f6f1;
+  --bg-bottom: #e0ecf6;
+  --panel: #ffffff;
+  --ink: #1e2a36;
+  --muted: #5d6a75;
+  --line: #d5dce3;
+  --accent: #167a6c;
+  --accent-strong: #115a50;
+  --danger: #c2373f;
+  --bubble-me: #d8f0ec;
+  --bubble-other: #f1f4f8;
+  --shadow: 0 14px 40px rgba(22, 44, 62, 0.14);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: 'Space Grotesk', sans-serif;
+  background: linear-gradient(140deg, var(--bg-top), var(--bg-bottom));
+}
+
+#root {
+  min-height: 100vh;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+.screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(500px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 16px;
+}
+
+.auth-card h1 {
+  font-family: 'Newsreader', serif;
+  font-size: clamp(1.9rem, 3vw, 2.4rem);
+}
+
+.auth-card p,
+.auth-card small {
+  color: var(--muted);
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.96rem;
+}
+
+input,
+button {
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  font: inherit;
+}
+
+input {
+  padding: 11px 12px;
+  background: #fcfdfd;
+}
+
+button {
+  padding: 10px 14px;
+  color: #fff;
+  background: var(--accent);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+button:hover {
+  background: var(--accent-strong);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.chat-shell {
+  width: min(940px, 100%);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 18px 16px 12px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 12px;
+}
+
+.chat-header {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: var(--shadow);
+}
+
+.chat-header h2 {
+  font-family: 'Newsreader', serif;
+  font-size: 1.7rem;
+}
+
+.chat-header p {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.ghost {
+  background: #eff3f6;
+  color: var(--ink);
+}
+
+.timeline {
+  overflow-y: auto;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel), #f2f8fa 20%);
+  box-shadow: var(--shadow);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.bubble {
+  max-width: min(70ch, 85%);
+  background: var(--bubble-other);
+  border: 1px solid #dbe3ea;
+  border-radius: 16px 16px 16px 4px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.bubble.mine {
+  margin-left: auto;
+  background: var(--bubble-me);
+  border-radius: 16px 16px 4px 16px;
+  border-color: #c7e5df;
+}
+
+.bubble strong {
+  font-size: 0.85rem;
+}
+
+.bubble p {
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
+.bubble time {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.composer {
+  position: sticky;
+  bottom: 8px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow: var(--shadow);
+}
+
+.hidden {
+  display: none;
+}
+
+.media {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #cfd9e1;
+}
+
+.media.image {
+  max-height: 300px;
+  object-fit: cover;
+}
+
+.player {
+  background: #fff;
+}
+
+.file-link {
+  color: var(--accent-strong);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.floating {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  border: 1px solid #f2bdc1;
+  padding: 8px 12px;
+  border-radius: 9px;
+}
+
+@media (max-width: 700px) {
+  .chat-shell {
+    padding: 10px;
+  }
+
+  .composer {
+    grid-template-columns: 1fr;
+  }
+
+  .bubble {
+    max-width: 95%;
+  }
+}
