@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: single-chat
+    env: node
+    plan: free
+    autoDeploy: true
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: USER1_NAME
+        value: saniya
+      - key: USER1_PASSWORD
+        value: saniya1234
+      - key: USER2_NAME
+        value: sujal
+      - key: USER2_PASSWORD
+        value: sujal1234
+    disk:
+      name: single-chat-data
+      mountPath: /opt/render/project/src/server/data
+      sizeGB: 1
