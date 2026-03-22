@@ -264,12 +264,13 @@ function App() {
   async function handleLogin(event) {
     event.preventDefault()
     setError('')
+    const normalizedUsername = username.trim().toLowerCase()
 
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username: normalizedUsername, password }),
     })
 
     const data = await res.json()
