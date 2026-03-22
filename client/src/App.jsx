@@ -441,7 +441,6 @@ function App() {
             </label>
             <button type="submit">Enter Chat</button>
           </form>
-          <small>Default users: saniya / sujal with seeded passwords from server env.</small>
           {error && <p className="error">{error}</p>}
         </section>
       </main>
@@ -474,6 +473,16 @@ function App() {
           }
         }}
       >
+        {hasMoreMessages && (
+          <button
+            type="button"
+            className="load-older-hint"
+            onClick={loadOlderMessages}
+            disabled={loadingOlderMessages}
+          >
+            {loadingOlderMessages ? 'Loading older messages...' : 'Click here to load older messages'}
+          </button>
+        )}
         {loadingOlderMessages && <p className="history-status">Loading older messages...</p>}
         {sortedMessages.map((message) => {
           const mine = message.sender.id === user.id

@@ -158,6 +158,26 @@ button:disabled {
   justify-content: flex-end;
   align-items: flex-start;
   gap: 10px;
+  position: relative;
+}
+
+.load-older-hint {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #eef4f8;
+  color: var(--muted);
+  border: 1px solid #d6e1ea;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  box-shadow: 0 4px 12px rgba(16, 44, 64, 0.08);
+  z-index: 1;
+}
+
+.load-older-hint:hover {
+  background: #e5eef5;
 }
 
 .bubble {
