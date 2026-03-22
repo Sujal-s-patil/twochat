@@ -23,11 +23,14 @@ const dataDir = path.resolve(__dirname, "../data");
 const uploadDir = path.join(dataDir, "uploads");
 const sessionsDir = path.join(dataDir, "sessions");
 const dbFile = path.join(dataDir, "store.json");
+const clientDistDir = path.resolve(__dirname, "../../client/dist");
 
 fs.mkdirSync(uploadDir, { recursive: true });
 fs.mkdirSync(sessionsDir, { recursive: true });
 
 const PORT = Number(process.env.PORT || 3001);
+const NODE_ENV = process.env.NODE_ENV || "development";
+const isProduction = NODE_ENV === "production";
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
 const SESSION_SECRET = process.env.SESSION_SECRET || "change-me-in-env";
 const USER1_NAME = process.env.USER1_NAME || "saniya";
@@ -83,6 +86,10 @@ await writeStore(store);
 const app = express();
 const httpServer = createServer(app);
 
+if (isProduction) {
+  app.set("trust proxy", 1);
+}
+
 app.use(
   helmet({
     crossOriginResourcePolicy: false,
@@ -91,7 +98,7 @@ app.use(
 
 app.use(
   cors({
-    origin: CLIENT_ORIGIN,
+    origin: isProduction ? true : CLIENT_ORIGIN,
     credentials: true,
   }),
 );
@@ -111,7 +118,7 @@ const sessionMiddleware = session({
   cookie: {
     httpOnly: true,
     sameSite: "lax",
-    secure: false,
+    secure: isProduction,
     maxAge: 1000 * 60 * 60 * 24,
   },
 });
@@ -321,9 +328,16 @@ app.use((err, _req, res, _next) => {
   return res.status(500).json({ error: message });
 });
 
+if (fs.existsSync(clientDistDir)) {
+  app.use(express.static(clientDistDir));
+  app.get(/^(?!\/api|\/socket\.io).*/, (_req, res) => {
+    res.sendFile(path.join(clientDistDir, "index.html"));
+  });
+}
+
 const io = new Server(httpServer, {
   cors: {
-    origin: CLIENT_ORIGIN,
+    origin: isProduction ? true : CLIENT_ORIGIN,
     credentials: true,
   },
 });

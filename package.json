@@ -7,6 +7,9 @@
     "dev": "concurrently -n server,client -c green,blue \"npm run dev -w server\" \"node -e \\\"const ping=()=>fetch('http://127.0.0.1:3001').then(()=>process.exit(0)).catch(()=>setTimeout(ping,200)); ping();\\\" && npm run dev -w client\"",
     "dev:server": "npm run dev -w server",
     "dev:client": "npm run dev -w client",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server",
+    "heroku-postbuild": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
