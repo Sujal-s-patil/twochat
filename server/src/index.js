@@ -162,6 +162,21 @@ app.post("/api/auth/login", loginRateLimiter, async (req, res) => {
 
   req.session.userId = user.id;
   req.session.username = user.username;
+
+  try {
+    await new Promise((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+  } catch {
+    return res.status(500).json({ error: "Could not create session. Try again." });
+  }
+
   return res.json({ user: { id: user.id, username: user.username } });
 });
 
