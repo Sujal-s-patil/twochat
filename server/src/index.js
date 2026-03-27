@@ -45,6 +45,9 @@ const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "chat-upl
 const SUPABASE_FILE_SIGNED_URL_TTL_SECONDS = Number(
   process.env.SUPABASE_FILE_SIGNED_URL_TTL_SECONDS || 60,
 );
+const DB_CONNECTION_TIMEOUT_MS = Number(process.env.DB_CONNECTION_TIMEOUT_MS || 60000);
+const DB_INIT_MAX_ATTEMPTS = Number(process.env.DB_INIT_MAX_ATTEMPTS || 5);
+const DB_INIT_RETRY_DELAY_MS = Number(process.env.DB_INIT_RETRY_DELAY_MS || 5000);
 
 function getDatabaseTargetSummary(connectionString) {
   try {
@@ -74,6 +77,9 @@ function logEnvPresence() {
     ["CLIENT_ORIGIN", CLIENT_ORIGIN],
     ["SUPABASE_STORAGE_BUCKET", SUPABASE_STORAGE_BUCKET],
     ["SUPABASE_FILE_SIGNED_URL_TTL_SECONDS", String(SUPABASE_FILE_SIGNED_URL_TTL_SECONDS)],
+    ["DB_CONNECTION_TIMEOUT_MS", String(DB_CONNECTION_TIMEOUT_MS)],
+    ["DB_INIT_MAX_ATTEMPTS", String(DB_INIT_MAX_ATTEMPTS)],
+    ["DB_INIT_RETRY_DELAY_MS", String(DB_INIT_RETRY_DELAY_MS)],
     ["USER1_NAME", USER1_NAME],
     ["USER1_PASSWORD", USER1_PASSWORD],
     ["USER2_NAME", USER2_NAME],
@@ -114,7 +120,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_DB_URL) {
 const pool = new Pool({
   connectionString: SUPABASE_DB_URL,
   ssl: { rejectUnauthorized: false },
-  connectionTimeoutMillis: 15000,
+  connectionTimeoutMillis: DB_CONNECTION_TIMEOUT_MS,
 });
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -136,16 +142,30 @@ async function seedUser(username, password) {
 async function initializeDatabase() {
   const dbTarget = getDatabaseTargetSummary(SUPABASE_DB_URL);
   console.log(`[startup] DB target: ${dbTarget}`);
-  try {
-    await pool.query("SELECT 1");
-    console.log("[startup] DB connectivity check passed.");
 
-    await seedUser(USER1_NAME, USER1_PASSWORD);
-    await seedUser(USER2_NAME, USER2_PASSWORD);
-    console.log("[startup] Seed users ensured.");
-  } catch (error) {
-    console.error("[startup] Database initialization failed:", error);
-    throw error;
+  for (let attempt = 1; attempt <= DB_INIT_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await pool.query("SELECT 1");
+      console.log("[startup] DB connectivity check passed.");
+
+      await seedUser(USER1_NAME, USER1_PASSWORD);
+      await seedUser(USER2_NAME, USER2_PASSWORD);
+      console.log("[startup] Seed users ensured.");
+      return;
+    } catch (error) {
+      const isLastAttempt = attempt === DB_INIT_MAX_ATTEMPTS;
+      console.error(
+        `[startup] Database initialization attempt ${attempt}/${DB_INIT_MAX_ATTEMPTS} failed:`,
+        error,
+      );
+
+      if (isLastAttempt) {
+        console.error("[startup] Database initialization failed.");
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, DB_INIT_RETRY_DELAY_MS));
+    }
   }
 }
 
