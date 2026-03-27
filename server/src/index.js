@@ -46,6 +46,54 @@ const SUPABASE_FILE_SIGNED_URL_TTL_SECONDS = Number(
   process.env.SUPABASE_FILE_SIGNED_URL_TTL_SECONDS || 60,
 );
 
+function hasEnvValue(value) {
+  return typeof value === "string" ? value.trim().length > 0 : Boolean(value);
+}
+
+function logEnvPresence() {
+  const requiredForStartup = [
+    ["SESSION_SECRET", SESSION_SECRET],
+    ["SUPABASE_URL", SUPABASE_URL],
+    ["SUPABASE_SERVICE_ROLE_KEY", SUPABASE_SERVICE_ROLE_KEY],
+    ["SUPABASE_DB_URL", SUPABASE_DB_URL],
+  ];
+
+  const configuredWithDefaults = [
+    ["NODE_ENV", NODE_ENV],
+    ["CLIENT_ORIGIN", CLIENT_ORIGIN],
+    ["SUPABASE_STORAGE_BUCKET", SUPABASE_STORAGE_BUCKET],
+    ["SUPABASE_FILE_SIGNED_URL_TTL_SECONDS", String(SUPABASE_FILE_SIGNED_URL_TTL_SECONDS)],
+    ["USER1_NAME", USER1_NAME],
+    ["USER1_PASSWORD", USER1_PASSWORD],
+    ["USER2_NAME", USER2_NAME],
+    ["USER2_PASSWORD", USER2_PASSWORD],
+  ];
+
+  const requiredMissing = requiredForStartup
+    .filter(([, value]) => !hasEnvValue(value))
+    .map(([name]) => name);
+  const requiredPresent = requiredForStartup
+    .filter(([, value]) => hasEnvValue(value))
+    .map(([name]) => name);
+
+  const optionalPresent = configuredWithDefaults
+    .filter(([, value]) => hasEnvValue(value))
+    .map(([name]) => name);
+
+  console.log("[startup] Env check");
+  console.log(
+    `[startup] Required present (${requiredPresent.length}/${requiredForStartup.length}): ${requiredPresent.join(", ") || "none"}`,
+  );
+  if (requiredMissing.length > 0) {
+    console.error(`[startup] Required missing: ${requiredMissing.join(", ")}`);
+  }
+  console.log(
+    `[startup] Config/default present (${optionalPresent.length}/${configuredWithDefaults.length}): ${optionalPresent.join(", ") || "none"}`,
+  );
+}
+
+logEnvPresence();
+
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_DB_URL) {
   throw new Error(
     "Missing Supabase configuration. Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and SUPABASE_DB_URL.",
@@ -80,7 +128,7 @@ function mapMessageRow(row) {
     body: row.body,
     createdAt: new Date(row.created_at).getTime(),
     sender: {
-      id: Number(row.sender_id),
+      id: row.sender_id,
       username: row.sender_username || "unknown",
     },
     file: row.attachment_id
@@ -207,7 +255,7 @@ app.post("/api/auth/login", loginRateLimiter, async (req, res) => {
     return res.status(401).json({ error: "Invalid credentials." });
   }
 
-  req.session.userId = Number(user.id);
+  req.session.userId = user.id;
   req.session.username = user.username;
 
   try {
@@ -224,7 +272,7 @@ app.post("/api/auth/login", loginRateLimiter, async (req, res) => {
     return res.status(500).json({ error: "Could not create session. Try again." });
   }
 
-  return res.json({ user: { id: Number(user.id), username: user.username } });
+  return res.json({ user: { id: user.id, username: user.username } });
 });
 
 app.post("/api/auth/logout", requireAuth, (req, res) => {
@@ -430,7 +478,7 @@ io.use((socket, next) => {
     return next(new Error("Unauthorized"));
   }
 
-  socket.user = { id: Number(userId), username };
+  socket.user = { id: userId, username };
   return next();
 });
 
