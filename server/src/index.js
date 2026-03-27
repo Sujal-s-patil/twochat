@@ -1,6 +1,5 @@
 import path from "path";
 import fs from "fs";
-import fsp from "fs/promises";
 import { fileURLToPath } from "url";
 import express from "express";
 import helmet from "helmet";
@@ -14,74 +13,121 @@ import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { v4 as uuidv4 } from "uuid";
+import { Pool } from "pg";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const dataDir = path.resolve(__dirname, "../data");
-const uploadDir = path.join(dataDir, "uploads");
 const sessionsDir = path.join(dataDir, "sessions");
-const dbFile = path.join(dataDir, "store.json");
 const clientDistDir = path.resolve(__dirname, "../../client/dist");
 
-fs.mkdirSync(uploadDir, { recursive: true });
 fs.mkdirSync(sessionsDir, { recursive: true });
 
 const PORT = Number(process.env.PORT || 3001);
 const NODE_ENV = process.env.NODE_ENV || "development";
 const isProduction = NODE_ENV === "production";
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+const allowedOrigins = CLIENT_ORIGIN.split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 const SESSION_SECRET = process.env.SESSION_SECRET || "change-me-in-env";
 const USER1_NAME = process.env.USER1_NAME || "saniya";
 const USER1_PASSWORD = process.env.USER1_PASSWORD || "saniya1234";
 const USER2_NAME = process.env.USER2_NAME || "sujal";
 const USER2_PASSWORD = process.env.USER2_PASSWORD || "sujal1234";
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_DB_URL = process.env.SUPABASE_DB_URL;
+const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "chat-uploads";
+const SUPABASE_FILE_SIGNED_URL_TTL_SECONDS = Number(
+  process.env.SUPABASE_FILE_SIGNED_URL_TTL_SECONDS || 60,
+);
 
-const FileStore = FileStoreFactory(session);
-
-async function readStore() {
-  try {
-    const raw = await fsp.readFile(dbFile, "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return {
-      users: [],
-      files: [],
-      messages: [],
-      counters: {
-        userId: 0,
-      },
-    };
-  }
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_DB_URL) {
+  throw new Error(
+    "Missing Supabase configuration. Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and SUPABASE_DB_URL.",
+  );
 }
 
-async function writeStore(store) {
-  await fsp.writeFile(dbFile, JSON.stringify(store, null, 2), "utf8");
-}
+const pool = new Pool({
+  connectionString: SUPABASE_DB_URL,
+  ssl: { rejectUnauthorized: false },
+});
 
-const store = await readStore();
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
 
 async function seedUser(username, password) {
-  const existing = store.users.find((item) => item.username === username);
-  if (existing) {
-    return;
+  const passwordHash = await bcrypt.hash(password, 12);
+  await pool.query(
+    `
+      INSERT INTO chat_users (username, password_hash)
+      VALUES ($1, $2)
+      ON CONFLICT (username) DO NOTHING
+    `,
+    [username.toLowerCase(), passwordHash],
+  );
+}
+
+function mapMessageRow(row) {
+  return {
+    id: row.id,
+    type: row.type,
+    body: row.body,
+    createdAt: new Date(row.created_at).getTime(),
+    sender: {
+      id: Number(row.sender_id),
+      username: row.sender_username || "unknown",
+    },
+    file: row.attachment_id
+      ? {
+          id: row.attachment_id,
+          name: row.attachment_name,
+          mimeType: row.attachment_mime_type,
+          size: Number(row.attachment_size),
+        }
+      : null,
+  };
+}
+
+async function getMessageById(messageId) {
+  const { rows } = await pool.query(
+    `
+      SELECT
+        m.id,
+        m.type,
+        m.body,
+        m.created_at,
+        u.id AS sender_id,
+        u.username AS sender_username,
+        f.id AS attachment_id,
+        f.original_name AS attachment_name,
+        f.mime_type AS attachment_mime_type,
+        f.size AS attachment_size
+      FROM chat_messages m
+      JOIN chat_users u ON u.id = m.sender_id
+      LEFT JOIN chat_files f ON f.id = m.file_id
+      WHERE m.id = $1
+      LIMIT 1
+    `,
+    [messageId],
+  );
+
+  if (!rows[0]) {
+    return null;
   }
 
-  store.counters.userId += 1;
-  const passwordHash = await bcrypt.hash(password, 12);
-
-  store.users.push({
-    id: store.counters.userId,
-    username,
-    passwordHash,
-    createdAt: Date.now(),
-  });
+  return mapMessageRow(rows[0]);
 }
 
 await seedUser(USER1_NAME, USER1_PASSWORD);
 await seedUser(USER2_NAME, USER2_PASSWORD);
-await writeStore(store);
+
+const FileStore = FileStoreFactory(session);
 
 const app = express();
 const httpServer = createServer(app);
@@ -98,7 +144,7 @@ app.use(
 
 app.use(
   cors({
-    origin: isProduction ? true : CLIENT_ORIGIN,
+    origin: isProduction ? allowedOrigins : CLIENT_ORIGIN,
     credentials: true,
   }),
 );
@@ -140,27 +186,28 @@ function requireAuth(req, res, next) {
   return next();
 }
 
-function getUserById(userId) {
-  return store.users.find((item) => item.id === userId);
-}
-
 app.post("/api/auth/login", loginRateLimiter, async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password are required." });
   }
 
-  const user = store.users.find((item) => item.username === username);
+  const { rows } = await pool.query(
+    "SELECT id, username, password_hash FROM chat_users WHERE username = lower($1) LIMIT 1",
+    [String(username)],
+  );
+  const user = rows[0];
+
   if (!user) {
     return res.status(401).json({ error: "Invalid credentials." });
   }
 
-  const valid = await bcrypt.compare(password, user.passwordHash);
+  const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) {
     return res.status(401).json({ error: "Invalid credentials." });
   }
 
-  req.session.userId = user.id;
+  req.session.userId = Number(user.id);
   req.session.username = user.username;
 
   try {
@@ -177,24 +224,13 @@ app.post("/api/auth/login", loginRateLimiter, async (req, res) => {
     return res.status(500).json({ error: "Could not create session. Try again." });
   }
 
-  return res.json({ user: { id: user.id, username: user.username } });
+  return res.json({ user: { id: Number(user.id), username: user.username } });
 });
 
 app.post("/api/auth/logout", requireAuth, (req, res) => {
   req.session.destroy(() => {
     res.clearCookie("connect.sid");
     res.json({ ok: true });
-  });
-});
-
-app.post("/api/auth/logout-beacon", (req, res) => {
-  if (!req.session) {
-    return res.status(204).end();
-  }
-
-  return req.session.destroy(() => {
-    res.clearCookie("connect.sid");
-    res.status(204).end();
   });
 });
 
@@ -205,45 +241,41 @@ app.get("/api/auth/me", (req, res) => {
   return res.json({ user: { id: req.session.userId, username: req.session.username } });
 });
 
-function mapMessage(rawMessage) {
-  const sender = getUserById(rawMessage.senderId);
-  const rawFile = rawMessage.fileId
-    ? store.files.find((item) => item.id === rawMessage.fileId)
-    : null;
-
-  return {
-    id: rawMessage.id,
-    type: rawMessage.type,
-    body: rawMessage.body,
-    createdAt: rawMessage.createdAt,
-    sender: {
-      id: sender?.id,
-      username: sender?.username || "unknown",
-    },
-    file: rawFile
-      ? {
-          id: rawFile.id,
-          name: rawFile.originalName,
-          mimeType: rawFile.mimeType,
-          size: rawFile.size,
-        }
-      : null,
-  };
-}
-
-app.get("/api/messages", requireAuth, (req, res) => {
+app.get("/api/messages", requireAuth, async (req, res) => {
   const requestedLimit = Number(req.query.limit);
   const requestedOffset = Number(req.query.offset);
   const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 30;
   const offset = Number.isFinite(requestedOffset) ? Math.max(requestedOffset, 0) : 0;
 
-  const total = store.messages.length;
-  const end = Math.max(total - offset, 0);
-  const start = Math.max(end - limit, 0);
+  const [countResult, pageResult] = await Promise.all([
+    pool.query("SELECT COUNT(*)::bigint AS total FROM chat_messages"),
+    pool.query(
+      `
+        SELECT
+          m.id,
+          m.type,
+          m.body,
+          m.created_at,
+          u.id AS sender_id,
+          u.username AS sender_username,
+          f.id AS attachment_id,
+          f.original_name AS attachment_name,
+          f.mime_type AS attachment_mime_type,
+          f.size AS attachment_size
+        FROM chat_messages m
+        JOIN chat_users u ON u.id = m.sender_id
+        LEFT JOIN chat_files f ON f.id = m.file_id
+        ORDER BY m.created_at DESC, m.id DESC
+        LIMIT $1 OFFSET $2
+      `,
+      [limit, offset],
+    ),
+  ]);
 
-  const messages = store.messages.slice(start, end).map(mapMessage);
+  const total = Number(countResult.rows[0]?.total || 0);
+  const messages = pageResult.rows.reverse().map(mapMessageRow);
   const nextOffset = offset + messages.length;
-  const hasMore = start > 0;
+  const hasMore = nextOffset < total;
 
   return res.json({
     messages,
@@ -260,16 +292,8 @@ app.get("/api/messages", requireAuth, (req, res) => {
 const allowedMimePrefixes = ["image/", "audio/", "video/"];
 const allowedMimeSet = new Set(["application/pdf"]);
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const extension = path.extname(file.originalname);
-    cb(null, `${uuidv4()}${extension}`);
-  },
-});
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed =
@@ -289,50 +313,89 @@ app.post("/api/upload", requireAuth, upload.single("file"), async (req, res) => 
 
   const fileId = uuidv4();
   const messageId = uuidv4();
-  const createdAt = Date.now();
+  const createdAt = new Date();
+  const createdAtMs = createdAt.getTime();
+  const extension = path.extname(req.file.originalname || "").replace(/[^a-zA-Z0-9.]/g, "");
+  const storagePath = `uploads/${req.session.userId}/${createdAtMs}-${fileId}${extension}`;
 
-  store.files.push({
-    id: fileId,
-    originalName: req.file.originalname,
-    storedName: req.file.filename,
-    mimeType: req.file.mimetype,
-    size: req.file.size,
-    senderId: req.session.userId,
-    createdAt,
-  });
+  const uploadResult = await supabase.storage
+    .from(SUPABASE_STORAGE_BUCKET)
+    .upload(storagePath, req.file.buffer, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: req.file.mimetype,
+    });
 
-  store.messages.push({
-    id: messageId,
-    senderId: req.session.userId,
-    type: "file",
-    body: null,
-    fileId,
-    createdAt,
-  });
+  if (uploadResult.error) {
+    return res.status(500).json({ error: `Supabase upload failed: ${uploadResult.error.message}` });
+  }
 
-  await writeStore(store);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `
+        INSERT INTO chat_files (id, original_name, storage_path, mime_type, size, sender_id, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `,
+      [
+        fileId,
+        req.file.originalname,
+        storagePath,
+        req.file.mimetype,
+        req.file.size,
+        req.session.userId,
+        createdAt,
+      ],
+    );
 
-  const payload = mapMessage(store.messages[store.messages.length - 1]);
+    await client.query(
+      `
+        INSERT INTO chat_messages (id, sender_id, type, body, file_id, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [messageId, req.session.userId, "file", null, fileId, createdAt],
+    );
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([storagePath]);
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  const payload = await getMessageById(messageId);
+  if (!payload) {
+    return res.status(500).json({ error: "Failed to load saved message." });
+  }
+
   io.to("private-chat").emit("message:new", payload);
   return res.json({ message: payload });
 });
 
 app.get("/api/files/:id", requireAuth, async (req, res) => {
-  const file = store.files.find((item) => item.id === req.params.id);
+  const { rows } = await pool.query(
+    "SELECT id, original_name, storage_path, mime_type, size FROM chat_files WHERE id = $1 LIMIT 1",
+    [req.params.id],
+  );
+  const file = rows[0];
+
   if (!file) {
     return res.status(404).json({ error: "File not found." });
   }
 
-  const absolutePath = path.join(uploadDir, file.storedName);
-  if (!fs.existsSync(absolutePath)) {
-    return res.status(404).json({ error: "Stored file is missing." });
+  const signedUrlResult = await supabase.storage
+    .from(SUPABASE_STORAGE_BUCKET)
+    .createSignedUrl(file.storage_path, SUPABASE_FILE_SIGNED_URL_TTL_SECONDS);
+
+  if (signedUrlResult.error || !signedUrlResult.data?.signedUrl) {
+    return res.status(500).json({ error: "Could not create signed download URL." });
   }
 
-  res.setHeader("Content-Type", file.mimeType);
-  res.setHeader("Content-Length", String(file.size));
-  res.setHeader("Cache-Control", "private, max-age=31536000, immutable, no-transform");
-  res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(file.originalName)}"`);
-  return res.sendFile(absolutePath);
+  res.setHeader("Cache-Control", "private, no-store");
+  return res.redirect(302, signedUrlResult.data.signedUrl);
 });
 
 app.use((err, _req, res, _next) => {
@@ -352,7 +415,7 @@ if (fs.existsSync(clientDistDir)) {
 
 const io = new Server(httpServer, {
   cors: {
-    origin: isProduction ? true : CLIENT_ORIGIN,
+    origin: isProduction ? allowedOrigins : CLIENT_ORIGIN,
     credentials: true,
   },
 });
@@ -367,7 +430,7 @@ io.use((socket, next) => {
     return next(new Error("Unauthorized"));
   }
 
-  socket.user = { id: userId, username };
+  socket.user = { id: Number(userId), username };
   return next();
 });
 
@@ -380,25 +443,29 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const createdAt = Date.now();
+    const createdAt = new Date();
     const messageId = uuidv4();
 
-    store.messages.push({
+    await pool.query(
+      `
+        INSERT INTO chat_messages (id, sender_id, type, body, file_id, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [messageId, socket.user.id, "text", text, null, createdAt],
+    );
+
+    io.to("private-chat").emit("message:new", {
       id: messageId,
-      senderId: socket.user.id,
       type: "text",
       body: text,
-      fileId: null,
-      createdAt,
+      createdAt: createdAt.getTime(),
+      sender: socket.user,
+      file: null,
     });
-
-    await writeStore(store);
-
-    io.to("private-chat").emit("message:new", mapMessage(store.messages[store.messages.length - 1]));
   });
 });
 
 httpServer.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
-  console.log(`Seed users: ${USER1_NAME}/${USER1_PASSWORD} and ${USER2_NAME}/${USER2_PASSWORD}`);
+  console.log(`Seed users: ${USER1_NAME} and ${USER2_NAME}`);
 });

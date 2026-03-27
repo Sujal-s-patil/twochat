@@ -10,8 +10,22 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: CLIENT_ORIGIN
+        value: https://saniya.sujapatil.dev
+      - key: DATA_PROVIDER
+        value: supabase
       - key: SESSION_SECRET
         generateValue: true
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_DB_URL
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: chat-uploads
+      - key: SUPABASE_FILE_SIGNED_URL_TTL_SECONDS
+        value: "60"
       - key: USER1_NAME
         value: saniya
       - key: USER1_PASSWORD

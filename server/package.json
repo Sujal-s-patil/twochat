@@ -16,8 +16,8 @@
     "nodemon": "^3.1.14"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
     "bcryptjs": "^3.0.3",
-    "connect-sqlite3": "^0.9.16",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
@@ -25,10 +25,9 @@
     "express-session": "^1.19.0",
     "helmet": "^8.1.0",
     "multer": "^2.1.1",
+    "pg": "^8.16.3",
     "session-file-store": "^1.5.0",
     "socket.io": "^4.8.3",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^6.0.1",
     "uuid": "^13.0.0"
   }
 }
