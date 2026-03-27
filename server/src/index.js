@@ -46,6 +46,17 @@ const SUPABASE_FILE_SIGNED_URL_TTL_SECONDS = Number(
   process.env.SUPABASE_FILE_SIGNED_URL_TTL_SECONDS || 60,
 );
 
+function getDatabaseTargetSummary(connectionString) {
+  try {
+    const parsed = new URL(connectionString);
+    const port = parsed.port || "5432";
+    const databaseName = parsed.pathname.replace(/^\//, "") || "(unknown-db)";
+    return `${parsed.hostname}:${port}/${databaseName}`;
+  } catch {
+    return "invalid connection string";
+  }
+}
+
 function hasEnvValue(value) {
   return typeof value === "string" ? value.trim().length > 0 : Boolean(value);
 }
@@ -103,6 +114,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_DB_URL) {
 const pool = new Pool({
   connectionString: SUPABASE_DB_URL,
   ssl: { rejectUnauthorized: false },
+  connectionTimeoutMillis: 15000,
 });
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -119,6 +131,22 @@ async function seedUser(username, password) {
     `,
     [username.toLowerCase(), passwordHash],
   );
+}
+
+async function initializeDatabase() {
+  const dbTarget = getDatabaseTargetSummary(SUPABASE_DB_URL);
+  console.log(`[startup] DB target: ${dbTarget}`);
+  try {
+    await pool.query("SELECT 1");
+    console.log("[startup] DB connectivity check passed.");
+
+    await seedUser(USER1_NAME, USER1_PASSWORD);
+    await seedUser(USER2_NAME, USER2_PASSWORD);
+    console.log("[startup] Seed users ensured.");
+  } catch (error) {
+    console.error("[startup] Database initialization failed:", error);
+    throw error;
+  }
 }
 
 function mapMessageRow(row) {
@@ -172,13 +200,17 @@ async function getMessageById(messageId) {
   return mapMessageRow(rows[0]);
 }
 
-await seedUser(USER1_NAME, USER1_PASSWORD);
-await seedUser(USER2_NAME, USER2_PASSWORD);
+await initializeDatabase();
 
 const FileStore = FileStoreFactory(session);
 
 const app = express();
 const httpServer = createServer(app);
+
+httpServer.on("error", (error) => {
+  console.error("[startup] HTTP server failed to bind:", error);
+  process.exit(1);
+});
 
 if (isProduction) {
   app.set("trust proxy", 1);
