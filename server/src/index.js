@@ -264,7 +264,7 @@ const sessionMiddleware = session({
   cookie: {
     httpOnly: true,
     sameSite: "lax",
-    secure: isProduction,
+    secure: "auto",
     maxAge: 1000 * 60 * 60 * 24,
   },
 });
@@ -336,7 +336,7 @@ app.post("/api/auth/logout", requireAuth, (req, res) => {
 
 app.get("/api/auth/me", (req, res) => {
   if (!req.session.userId) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return res.json({ user: null });
   }
   return res.json({ user: { id: req.session.userId, username: req.session.username } });
 });
