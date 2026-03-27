@@ -506,7 +506,11 @@ app.use((err, _req, res, _next) => {
   return res.status(500).json({ error: message });
 });
 
-if (fs.existsSync(clientDistDir)) {
+const clientDistExists = fs.existsSync(clientDistDir);
+console.log(`[startup] client dist path: ${clientDistDir}`);
+console.log(`[startup] client dist exists: ${clientDistExists}`);
+
+if (clientDistExists) {
   app.use(express.static(clientDistDir));
   app.get(/^(?!\/api|\/socket\.io).*/, (_req, res) => {
     res.sendFile(path.join(clientDistDir, "index.html"));
