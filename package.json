@@ -8,6 +8,7 @@
     "dev:server": "npm run dev -w server",
     "dev:client": "npm run dev -w client",
     "build": "npm run build -w client",
+    "prestart": "[ -d client/dist ] || npm run build",
     "start": "npm run start -w server",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
